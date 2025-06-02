@@ -17,10 +17,10 @@ export function TranscriptionTile({
   agentAudioTrack,
   accentColor,
 }: {
-  agentAudioTrack: TrackReferenceOrPlaceholder;
+  agentAudioTrack?: TrackReferenceOrPlaceholder;
   accentColor: string;
 }) {
-  const agentMessages = useTrackTranscription(agentAudioTrack);
+  const agentMessages = useTrackTranscription(agentAudioTrack || undefined);
   const localParticipant = useLocalParticipant();
   const localMessages = useTrackTranscription({
     publication: localParticipant.microphoneTrack,
@@ -29,38 +29,42 @@ export function TranscriptionTile({
   });
 
   const [transcripts, setTranscripts] = useState<Map<string, ChatMessageType>>(
-    new Map()
+    new Map(),
   );
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const { chatMessages, send: sendChat } = useChat();
 
   // store transcripts
   useEffect(() => {
-    agentMessages.segments.forEach((s) =>
-      transcripts.set(
-        s.id,
-        segmentToChatMessage(
-          s,
-          transcripts.get(s.id),
-          agentAudioTrack.participant
-        )
-      )
-    );
+    if (agentAudioTrack) {
+      agentMessages.segments.forEach((s) =>
+        transcripts.set(
+          s.id,
+          segmentToChatMessage(
+            s,
+            transcripts.get(s.id),
+            agentAudioTrack.participant,
+          ),
+        ),
+      );
+    }
+
     localMessages.segments.forEach((s) =>
       transcripts.set(
         s.id,
         segmentToChatMessage(
           s,
           transcripts.get(s.id),
-          localParticipant.localParticipant
-        )
-      )
+          localParticipant.localParticipant,
+        ),
+      ),
     );
 
     const allMessages = Array.from(transcripts.values());
     for (const msg of chatMessages) {
-      const isAgent =
-        msg.from?.identity === agentAudioTrack.participant?.identity;
+      const isAgent = agentAudioTrack
+        ? msg.from?.identity === agentAudioTrack.participant?.identity
+        : msg.from?.identity !== localParticipant.localParticipant.identity;
       const isSelf =
         msg.from?.identity === localParticipant.localParticipant.identity;
       let name = msg.from?.name;
@@ -86,9 +90,10 @@ export function TranscriptionTile({
     transcripts,
     chatMessages,
     localParticipant.localParticipant,
-    agentAudioTrack.participant,
+    agentAudioTrack?.participant,
     agentMessages.segments,
     localMessages.segments,
+    agentAudioTrack,
   ]);
 
   return (
@@ -99,7 +104,7 @@ export function TranscriptionTile({
 function segmentToChatMessage(
   s: TranscriptionSegment,
   existingMessage: ChatMessageType | undefined,
-  participant: Participant
+  participant: Participant,
 ): ChatMessageType {
   const msg: ChatMessageType = {
     message: s.final ? s.text : `${s.text} ...`,
